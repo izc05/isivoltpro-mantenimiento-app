@@ -1,0 +1,333 @@
+import { useEffect, useMemo, useState } from "react";
+import BottomNav from "./components/BottomNav";
+import AgendaScreen from "./screens/AgendaScreen";
+import HomeScreen from "./screens/HomeScreen";
+import InstallationDetailScreen from "./screens/InstallationDetailScreen";
+import InstallationsScreen from "./screens/InstallationsScreen";
+import NewWorkOrderScreen from "./screens/NewWorkOrderScreen";
+import ReportsScreen from "./screens/ReportsScreen";
+import SettingsScreen from "./screens/SettingsScreen";
+import WorkOrderDetailScreen from "./screens/WorkOrderDetailScreen";
+import WorkOrdersScreen from "./screens/WorkOrdersScreen";
+import { exportBackup, importBackup } from "./services/backupService";
+import {
+  initializeData,
+  resetAllData,
+  saveAssets,
+  saveInstallations,
+  saveSettings,
+  saveTechnicians,
+  saveWorkOrders,
+} from "./services/storage";
+import { createId, generateWorkOrderNumber, nowIso } from "./utils/ids";
+
+const tabScreens = ["home", "installations", "workOrders", "agenda", "reports", "settings"];
+
+const TYPE_LABELS = {
+  preventiva: "Preventiva",
+  correctiva: "Correctiva",
+};
+
+const STATUS_LABELS = {
+  nueva: "Nueva",
+  pendiente: "Pendiente",
+  asignada: "Asignada",
+  en_curso: "En curso",
+  observada: "Observada",
+  demorada: "Demorada",
+  completada: "Completada",
+  cerrada: "Cerrada",
+  en_servicio: "En servicio",
+  mantenimiento: "Mantenimiento",
+  fuera_servicio: "Fuera servicio",
+  activo: "Activo",
+  en_revision: "En revision",
+  averiado: "Averiado",
+};
+
+const SPECIALTY_LABELS = {
+  electricidad: "Electricidad",
+  fontaneria: "Fontaneria",
+  climatizacion: "Climatizacion",
+  pci: "PCI",
+  general: "General",
+  mecanica: "General",
+};
+
+const PRIORITY_LABELS = {
+  baja: "Baja",
+  media: "Media",
+  alta: "Alta",
+  urgente: "Urgente",
+};
+
+const TYPE_VALUES = {
+  Preventiva: "preventiva",
+  Correctiva: "correctiva",
+  preventiva: "preventiva",
+  correctiva: "correctiva",
+};
+
+const STATUS_VALUES = {
+  Nueva: "nueva",
+  Pendiente: "pendiente",
+  Asignada: "asignada",
+  "En curso": "en_curso",
+  Observada: "observada",
+  Demorada: "demorada",
+  Completada: "completada",
+  Cerrada: "cerrada",
+};
+
+const SPECIALTY_VALUES = {
+  Electricidad: "electricidad",
+  Fontaneria: "fontaneria",
+  Climatizacion: "climatizacion",
+  PCI: "pci",
+  General: "general",
+  Mecanica: "general",
+};
+
+const PRIORITY_VALUES = {
+  Baja: "baja",
+  Media: "media",
+  Alta: "alta",
+  Urgente: "urgente",
+};
+
+function labelFrom(map, value) {
+  return map[value] || value || "";
+}
+
+function formatAddress(installation) {
+  return [installation.address, installation.city, installation.province].filter(Boolean).join(", ");
+}
+
+function getVisualByType(type) {
+  if (type === "hospital") return "hospital";
+  if (type === "centro_especialidades") return "clinic";
+  if (type === "residencia") return "residence";
+  if (type === "polideportivo") return "sports";
+  if (type === "colegio") return "school";
+  return "clinic";
+}
+
+function enrichInstallations(installations, assets, workOrders) {
+  return installations.map((installation) => {
+    const installationAssets = assets.filter((asset) => asset.installationId === installation.id);
+    const installationOrders = workOrders.filter((order) => order.installationId === installation.id);
+    const specialties = Object.entries(
+      installationAssets.reduce((groups, asset) => {
+        groups[asset.specialty] = (groups[asset.specialty] || 0) + 1;
+        return groups;
+      }, {})
+    ).map(([specialty, count]) => ({ name: labelFrom(SPECIALTY_LABELS, specialty), assets: count }));
+
+    return {
+      ...installation,
+      address: formatAddress(installation),
+      rawAddress: installation.address,
+      status: labelFrom(STATUS_LABELS, installation.status),
+      rawStatus: installation.status,
+      visual: getVisualByType(installation.type),
+      assetsCount: installationAssets.length,
+      lastUpdate: installation.updatedAt,
+      summary: {
+        assets: installationAssets.length,
+        preventive: installationOrders.filter((order) => order.type === "preventiva").length,
+        corrective: installationOrders.filter((order) => order.type === "correctiva").length,
+        technicians: new Set(installationOrders.map((order) => order.assignedTechnicianId).filter(Boolean)).size,
+      },
+      specialties: specialties.length ? specialties : [{ name: "General", assets: installationAssets.length }],
+    };
+  });
+}
+
+function enrichWorkOrders(workOrders, installations, assets, technicians) {
+  return workOrders.map((order) => {
+    const installation = installations.find((item) => item.id === order.installationId);
+    const asset = assets.find((item) => item.id === order.assetId);
+    const technician = technicians.find((item) => item.id === order.assignedTechnicianId);
+    return {
+      ...order,
+      rawType: order.type,
+      rawStatus: order.status,
+      rawPriority: order.priority,
+      rawSpecialty: order.specialty,
+      type: labelFrom(TYPE_LABELS, order.type),
+      status: labelFrom(STATUS_LABELS, order.status),
+      priority: labelFrom(PRIORITY_LABELS, order.priority),
+      specialty: labelFrom(SPECIALTY_LABELS, order.specialty),
+      installation: installation?.name || "Sin instalacion",
+      assetName: asset?.name || "",
+      technician: technician?.name || "Sin asignar",
+      photos: order.initialPhotos || [],
+      time: new Date(order.scheduledAt || order.createdAt).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" }),
+    };
+  });
+}
+
+export default function App() {
+  const [initialData] = useState(() => initializeData());
+  const [screen, setScreen] = useState("home");
+  const [previousScreen, setPreviousScreen] = useState("home");
+  const [installations, setInstallations] = useState(initialData.installations);
+  const [assets, setAssets] = useState(initialData.assets);
+  const [workOrders, setWorkOrders] = useState(initialData.workOrders);
+  const [technicians, setTechnicians] = useState(initialData.technicians);
+  const [settings, setSettings] = useState(initialData.settings);
+  const [selectedInstallationId, setSelectedInstallationId] = useState(initialData.installations[0]?.id || "");
+  const [selectedWorkOrderId, setSelectedWorkOrderId] = useState(initialData.workOrders[1]?.id || initialData.workOrders[0]?.id || "");
+  const [workOrderFilter, setWorkOrderFilter] = useState("Todas");
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [screen]);
+
+  useEffect(() => saveInstallations(installations), [installations]);
+  useEffect(() => saveAssets(assets), [assets]);
+  useEffect(() => saveWorkOrders(workOrders), [workOrders]);
+  useEffect(() => saveTechnicians(technicians), [technicians]);
+  useEffect(() => saveSettings(settings), [settings]);
+
+  const displayInstallations = useMemo(() => enrichInstallations(installations, assets, workOrders), [installations, assets, workOrders]);
+  const displayWorkOrders = useMemo(() => enrichWorkOrders(workOrders, installations, assets, technicians), [workOrders, installations, assets, technicians]);
+
+  const selectedInstallation = useMemo(
+    () => displayInstallations.find((installation) => installation.id === selectedInstallationId) || displayInstallations[0],
+    [displayInstallations, selectedInstallationId]
+  );
+
+  const selectedWorkOrder = useMemo(
+    () => displayWorkOrders.find((order) => order.id === selectedWorkOrderId) || displayWorkOrders[0],
+    [displayWorkOrders, selectedWorkOrderId]
+  );
+
+  const navigate = (target) => {
+    if (tabScreens.includes(target)) setPreviousScreen(target);
+    setScreen(target);
+  };
+
+  const openInstallation = (id) => {
+    setSelectedInstallationId(id);
+    setPreviousScreen("installations");
+    setScreen("installationDetail");
+  };
+
+  const openWorkOrder = (id) => {
+    setSelectedWorkOrderId(id);
+    setPreviousScreen(screen === "agenda" ? "agenda" : "workOrders");
+    setScreen("workOrderDetail");
+  };
+
+  const createWorkOrder = (form) => {
+    const installation = installations.find((item) => item.id === form.installationId) || installations[0];
+    const technician = technicians.find((item) => item.name === form.technician || item.id === form.technician);
+    const scheduledAt = `${form.date || new Date().toISOString().slice(0, 10)}T08:45:00.000Z`;
+    const createdAt = nowIso();
+    const created = {
+      id: createId("ot"),
+      number: generateWorkOrderNumber(workOrders),
+      title: form.description.split(".")[0] || "Nueva orden de trabajo",
+      type: TYPE_VALUES[form.type] || "correctiva",
+      status: "pendiente",
+      installationId: installation.id,
+      assetId: "",
+      specialty: SPECIALTY_VALUES[form.specialty] || "general",
+      location: form.location,
+      priority: PRIORITY_VALUES[form.priority] || "media",
+      assignedTechnicianId: technician?.id || "",
+      description: form.description,
+      actionTaken: "",
+      materials: [],
+      timeSpentMinutes: 0,
+      observations: "",
+      initialPhotos: ["bomba"],
+      finalPhotos: [],
+      createdAt,
+      scheduledAt,
+      completedAt: "",
+      updatedAt: createdAt,
+    };
+    setWorkOrders((current) => [created, ...current]);
+    setSelectedWorkOrderId(created.id);
+    setPreviousScreen("workOrders");
+    setScreen("workOrderDetail");
+  };
+
+  const updateWorkOrderStatus = (id, status) => {
+    const normalizedStatus = STATUS_VALUES[status] || status;
+    setWorkOrders((current) => current.map((order) => (order.id === id ? { ...order, status: normalizedStatus, updatedAt: nowIso() } : order)));
+  };
+
+  const reloadData = (nextData) => {
+    setInstallations(nextData.installations);
+    setAssets(nextData.assets);
+    setWorkOrders(nextData.workOrders);
+    setTechnicians(nextData.technicians);
+    setSettings(nextData.settings);
+    setSelectedInstallationId(nextData.installations[0]?.id || "");
+    setSelectedWorkOrderId(nextData.workOrders[0]?.id || "");
+    setScreen("home");
+  };
+
+  const handleImportBackup = async (file) => {
+    const restored = await importBackup(file);
+    reloadData(restored);
+  };
+
+  const activeTab = tabScreens.includes(screen)
+    ? screen
+    : screen === "installationDetail"
+      ? "installations"
+      : screen === "newWorkOrder" || screen === "workOrderDetail"
+        ? "workOrders"
+        : "home";
+
+  return (
+    <div className="min-h-screen bg-slate-200 text-appText">
+      <div className="mx-auto min-h-screen w-full max-w-md overflow-hidden bg-appBg shadow-2xl">
+        {screen === "home" && (
+          <HomeScreen
+            installations={displayInstallations}
+            workOrders={displayWorkOrders}
+            onNavigate={navigate}
+            onOpenInstallation={openInstallation}
+            onOpenWorkOrder={openWorkOrder}
+          />
+        )}
+        {screen === "installations" && <InstallationsScreen installations={displayInstallations} onOpenInstallation={openInstallation} />}
+        {screen === "installationDetail" && <InstallationDetailScreen installation={selectedInstallation} onBack={() => setScreen("installations")} />}
+        {screen === "workOrders" && (
+          <WorkOrdersScreen
+            workOrders={displayWorkOrders}
+            filter={workOrderFilter}
+            setFilter={setWorkOrderFilter}
+            onOpenWorkOrder={openWorkOrder}
+            onNewWorkOrder={() => {
+              setPreviousScreen("workOrders");
+              setScreen("newWorkOrder");
+            }}
+          />
+        )}
+        {screen === "workOrderDetail" && (
+          <WorkOrderDetailScreen order={selectedWorkOrder} onBack={() => setScreen(previousScreen)} onUpdateStatus={updateWorkOrderStatus} />
+        )}
+        {screen === "newWorkOrder" && (
+          <NewWorkOrderScreen installations={displayInstallations} technicians={technicians} onBack={() => setScreen(previousScreen)} onCreate={createWorkOrder} />
+        )}
+        {screen === "agenda" && <AgendaScreen workOrders={displayWorkOrders} onOpenWorkOrder={openWorkOrder} onNewWorkOrder={() => setScreen("newWorkOrder")} />}
+        {screen === "reports" && <ReportsScreen />}
+        {screen === "settings" && (
+          <SettingsScreen
+            settings={settings}
+            onExportBackup={exportBackup}
+            onImportBackup={handleImportBackup}
+            onResetAllData={() => reloadData(resetAllData())}
+          />
+        )}
+        {screen !== "newWorkOrder" && <BottomNav current={activeTab} onNavigate={navigate} />}
+      </div>
+    </div>
+  );
+}
