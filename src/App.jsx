@@ -95,6 +95,8 @@ const PRIORITY_VALUES = {
   Urgente: "urgente",
 };
 
+const OPEN_WORK_ORDER_STATUSES = new Set(["nueva", "pendiente", "asignada", "en_curso", "observada", "demorada"]);
+
 function labelFrom(map, value) {
   return map[value] || value || "";
 }
@@ -136,6 +138,7 @@ function enrichInstallations(installations, assets, workOrders) {
         assets: installationAssets.length,
         preventive: installationOrders.filter((order) => order.type === "preventiva").length,
         corrective: installationOrders.filter((order) => order.type === "correctiva").length,
+        openOrders: installationOrders.filter((order) => OPEN_WORK_ORDER_STATUSES.has(order.status)).length,
         technicians: new Set(installationOrders.map((order) => order.assignedTechnicianId).filter(Boolean)).size,
       },
       specialties: specialties.length ? specialties : [{ name: "General", assets: installationAssets.length }],
@@ -178,6 +181,7 @@ export default function App() {
   const [settings, setSettings] = useState(initialData.settings);
   const [selectedInstallationId, setSelectedInstallationId] = useState(initialData.installations[0]?.id || "");
   const [selectedWorkOrderId, setSelectedWorkOrderId] = useState(initialData.workOrders[1]?.id || initialData.workOrders[0]?.id || "");
+  const [newWorkOrderDefaults, setNewWorkOrderDefaults] = useState({});
   const [workOrderFilter, setWorkOrderFilter] = useState("Todas");
 
   useEffect(() => {
@@ -204,6 +208,7 @@ export default function App() {
   );
 
   const navigate = (target) => {
+    if (target === "newWorkOrder") setNewWorkOrderDefaults({});
     if (tabScreens.includes(target)) setPreviousScreen(target);
     setScreen(target);
   };
@@ -255,6 +260,44 @@ export default function App() {
     setScreen("workOrderDetail");
   };
 
+  const saveInstallation = (id, form) => {
+    const timestamp = nowIso();
+    if (id) {
+      setInstallations((current) =>
+        current.map((installation) =>
+          installation.id === id
+            ? {
+                ...installation,
+                ...form,
+                updatedAt: timestamp,
+              }
+            : installation
+        )
+      );
+      return;
+    }
+
+    const created = {
+      id: createId("inst"),
+      ...form,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
+    setInstallations((current) => [created, ...current]);
+    setSelectedInstallationId(created.id);
+  };
+
+  const deleteInstallation = (id) => {
+    setInstallations((current) => current.filter((installation) => installation.id !== id));
+    setAssets((current) => current.filter((asset) => asset.installationId !== id));
+    setWorkOrders((current) => current.filter((order) => order.installationId !== id));
+    if (selectedInstallationId === id) {
+      const nextInstallation = installations.find((installation) => installation.id !== id);
+      setSelectedInstallationId(nextInstallation?.id || "");
+      setScreen("installations");
+    }
+  };
+
   const updateWorkOrderStatus = (id, status) => {
     const normalizedStatus = STATUS_VALUES[status] || status;
     setWorkOrders((current) => current.map((order) => (order.id === id ? { ...order, status: normalizedStatus, updatedAt: nowIso() } : order)));
@@ -296,8 +339,31 @@ export default function App() {
             onOpenWorkOrder={openWorkOrder}
           />
         )}
-        {screen === "installations" && <InstallationsScreen installations={displayInstallations} onOpenInstallation={openInstallation} />}
-        {screen === "installationDetail" && <InstallationDetailScreen installation={selectedInstallation} onBack={() => setScreen("installations")} />}
+        {screen === "installations" && (
+          <InstallationsScreen
+            installations={displayInstallations}
+            assets={assets}
+            workOrders={workOrders}
+            onOpenInstallation={openInstallation}
+            onSaveInstallation={saveInstallation}
+            onDeleteInstallation={deleteInstallation}
+          />
+        )}
+        {screen === "installationDetail" && (
+          <InstallationDetailScreen
+            installation={selectedInstallation}
+            assets={assets.filter((asset) => asset.installationId === selectedInstallation?.id)}
+            workOrders={displayWorkOrders.filter((order) => order.installationId === selectedInstallation?.id)}
+            onBack={() => setScreen("installations")}
+            onSaveInstallation={saveInstallation}
+            onDeleteInstallation={deleteInstallation}
+            onCreateWorkOrder={() => {
+              setNewWorkOrderDefaults({ installationId: selectedInstallation?.id || "" });
+              setPreviousScreen("installationDetail");
+              setScreen("newWorkOrder");
+            }}
+          />
+        )}
         {screen === "workOrders" && (
           <WorkOrdersScreen
             workOrders={displayWorkOrders}
@@ -305,6 +371,7 @@ export default function App() {
             setFilter={setWorkOrderFilter}
             onOpenWorkOrder={openWorkOrder}
             onNewWorkOrder={() => {
+              setNewWorkOrderDefaults({});
               setPreviousScreen("workOrders");
               setScreen("newWorkOrder");
             }}
@@ -314,9 +381,24 @@ export default function App() {
           <WorkOrderDetailScreen order={selectedWorkOrder} onBack={() => setScreen(previousScreen)} onUpdateStatus={updateWorkOrderStatus} />
         )}
         {screen === "newWorkOrder" && (
-          <NewWorkOrderScreen installations={displayInstallations} technicians={technicians} onBack={() => setScreen(previousScreen)} onCreate={createWorkOrder} />
+          <NewWorkOrderScreen
+            installations={displayInstallations}
+            technicians={technicians}
+            defaults={newWorkOrderDefaults}
+            onBack={() => setScreen(previousScreen)}
+            onCreate={createWorkOrder}
+          />
         )}
-        {screen === "agenda" && <AgendaScreen workOrders={displayWorkOrders} onOpenWorkOrder={openWorkOrder} onNewWorkOrder={() => setScreen("newWorkOrder")} />}
+        {screen === "agenda" && (
+          <AgendaScreen
+            workOrders={displayWorkOrders}
+            onOpenWorkOrder={openWorkOrder}
+            onNewWorkOrder={() => {
+              setNewWorkOrderDefaults({});
+              setScreen("newWorkOrder");
+            }}
+          />
+        )}
         {screen === "reports" && <ReportsScreen />}
         {screen === "settings" && (
           <SettingsScreen

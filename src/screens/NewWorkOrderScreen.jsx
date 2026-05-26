@@ -1,5 +1,5 @@
 import { Building2, CalendarDays, Camera, Check, ChevronDown, ClipboardPlus, Flag, MapPin, User, Wrench, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Button from "../components/Button";
 import Card from "../components/Card";
 import Header from "../components/Header";
@@ -17,10 +17,10 @@ function Field({ label, icon: Icon, children }) {
   );
 }
 
-export default function NewWorkOrderScreen({ installations, technicians, onBack, onCreate }) {
+export default function NewWorkOrderScreen({ installations, technicians, defaults = {}, onBack, onCreate }) {
   const [form, setForm] = useState({
     type: "Correctiva",
-    installationId: installations[0]?.id || "",
+    installationId: defaults.installationId || installations[0]?.id || "",
     specialty: "Mecanica",
     location: "Planta Baja - Area de Bombas",
     technician: technicians[0]?.name || "",
@@ -28,6 +28,11 @@ export default function NewWorkOrderScreen({ installations, technicians, onBack,
     date: "2025-05-14",
     description: "Fuga de agua detectada en la conexion de la bomba principal. Requiere revision y reparacion inmediata.",
   });
+
+  useEffect(() => {
+    if (!defaults.installationId) return;
+    setForm((current) => ({ ...current, installationId: defaults.installationId }));
+  }, [defaults.installationId]);
 
   const update = (key, value) => setForm((current) => ({ ...current, [key]: value }));
 

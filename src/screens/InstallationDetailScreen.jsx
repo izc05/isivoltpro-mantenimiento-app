@@ -1,6 +1,9 @@
-import { CalendarDays, ChevronRight, Droplet, Edit3, FlameKindling, MapPin, MoreVertical, Phone, ShieldCheck, Snowflake, User, Users, Wrench, Zap } from "lucide-react";
+import { BriefcaseBusiness, CalendarDays, ChevronRight, Droplet, Edit3, FlameKindling, MapPin, PackagePlus, Phone, Plus, ShieldCheck, Snowflake, Trash2, User, Wrench, Zap } from "lucide-react";
+import { useState } from "react";
+import Button from "../components/Button";
 import Card from "../components/Card";
 import Header from "../components/Header";
+import InstallationFormModal from "../components/InstallationFormModal";
 import StatusBadge from "../components/StatusBadge";
 import { formatDateTime } from "../utils/dates";
 
@@ -15,7 +18,7 @@ const summaryTones = {
   Activos: "bg-blue-100 text-blue-700",
   Preventivos: "bg-orange-100 text-orange-700",
   Correctivos: "bg-red-100 text-red-700",
-  Tecnicos: "bg-purple-100 text-purple-700",
+  "OT abiertas": "bg-purple-100 text-purple-700",
 };
 
 const specialtyTones = {
@@ -25,7 +28,25 @@ const specialtyTones = {
   PCI: "bg-red-100 text-red-700",
 };
 
-export default function InstallationDetailScreen({ installation, onBack }) {
+export default function InstallationDetailScreen({ installation, assets = [], workOrders = [], onBack, onSaveInstallation, onDeleteInstallation, onCreateWorkOrder }) {
+  const [editing, setEditing] = useState(false);
+  if (!installation) return null;
+
+  const saveInstallation = (form) => {
+    onSaveInstallation(installation.id, form);
+    setEditing(false);
+  };
+
+  const askDelete = () => {
+    const hasRelations = assets.length || workOrders.length;
+    const message = hasRelations
+      ? "Esta instalacion tiene activos u ordenes asociadas. ¿Seguro que quieres eliminarla?"
+      : `¿Seguro que quieres eliminar ${installation.name}?`;
+    if (window.confirm(message)) onDeleteInstallation(installation.id);
+  };
+
+  const latestOrders = workOrders.slice(0, 3);
+
   return (
     <>
       <Header
@@ -34,11 +55,11 @@ export default function InstallationDetailScreen({ installation, onBack }) {
         onBack={onBack}
         actions={
           <>
-            <button className="grid h-12 w-12 place-items-center rounded-2xl bg-white/10 text-white ring-1 ring-white/20" aria-label="Editar">
+            <button className="grid h-12 w-12 place-items-center rounded-2xl bg-white/10 text-white ring-1 ring-white/20" onClick={() => setEditing(true)} aria-label="Editar">
               <Edit3 size={22} />
             </button>
-            <button className="grid h-12 w-12 place-items-center rounded-2xl bg-white/10 ring-1 ring-white/20" aria-label="Mas opciones">
-              <MoreVertical size={23} />
+            <button className="grid h-12 w-12 place-items-center rounded-2xl bg-white/10 text-red-200 ring-1 ring-white/20" onClick={askDelete} aria-label="Borrar">
+              <Trash2 size={22} />
             </button>
           </>
         }
@@ -60,17 +81,32 @@ export default function InstallationDetailScreen({ installation, onBack }) {
                 <MapPin className="shrink-0 text-slate-600" size={18} />
                 {installation.address}
               </p>
-              <StatusBadge status="En operacion" className="mt-4" />
+              <StatusBadge status={installation.status} className="mt-4" />
             </div>
           </div>
         </Card>
+
+        <div className="grid grid-cols-2 gap-3">
+          <Button icon={Plus} onClick={onCreateWorkOrder}>
+            Crear OT
+          </Button>
+          <Button icon={PackagePlus} variant="outline" onClick={() => alert("La gestion de activos llega en la Fase 4.")}>
+            Añadir activo
+          </Button>
+          <Button icon={ShieldCheck} variant="dark" onClick={() => alert("Listado completo de activos en la Fase 4.")}>
+            Ver activos
+          </Button>
+          <Button icon={BriefcaseBusiness} variant="outline" onClick={() => alert("Vista filtrada de ordenes en la Fase 5.")}>
+            Ver ordenes
+          </Button>
+        </div>
 
         <div className="grid grid-cols-4 gap-3">
           {[
             ["Activos", installation.summary.assets, ShieldCheck],
             ["Preventivos", installation.summary.preventive, CalendarDays],
             ["Correctivos", installation.summary.corrective, Wrench],
-            ["Tecnicos", installation.summary.technicians, Users],
+            ["OT abiertas", installation.summary.openOrders, BriefcaseBusiness],
           ].map(([label, value, Icon]) => (
             <Card key={label} className="grid place-items-center px-2 py-4 text-center">
               <div className={`grid h-11 w-11 place-items-center rounded-full ${summaryTones[label]}`}>
@@ -107,6 +143,7 @@ export default function InstallationDetailScreen({ installation, onBack }) {
             {[
               [User, "Responsable", installation.responsible],
               [Phone, "Telefono", installation.phone],
+              [MapPin, "Direccion", installation.address],
               [CalendarDays, "Ultima actualizacion", formatDateTime(installation.lastUpdate)],
             ].map(([Icon, label, value]) => (
               <div key={label} className="flex items-center gap-4 px-5 py-4">
@@ -118,6 +155,29 @@ export default function InstallationDetailScreen({ installation, onBack }) {
             ))}
           </Card>
         </section>
+
+        <section>
+          <h2 className="mb-3 px-1 text-lg font-black">Ultimas ordenes</h2>
+          <Card className="divide-y divide-slate-100 p-0">
+            {latestOrders.length ? (
+              latestOrders.map((order) => (
+                <div key={order.id} className="flex items-center gap-3 px-5 py-4">
+                  <div className={order.rawType === "correctiva" ? "grid h-11 w-11 place-items-center rounded-2xl bg-red-100 text-red-700" : "grid h-11 w-11 place-items-center rounded-2xl bg-blue-100 text-blue-700"}>
+                    {order.rawType === "correctiva" ? <Wrench size={22} /> : <CalendarDays size={22} />}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <strong className="block truncate text-primaryDark">{order.number}</strong>
+                    <p className="truncate text-sm font-semibold text-slate-500">{order.title}</p>
+                  </div>
+                  <StatusBadge status={order.status} className="shrink-0" />
+                </div>
+              ))
+            ) : (
+              <p className="px-5 py-6 text-sm font-semibold text-slate-500">Todavia no hay ordenes relacionadas con esta instalacion.</p>
+            )}
+          </Card>
+        </section>
+        {editing ? <InstallationFormModal installation={installation} onClose={() => setEditing(false)} onSave={saveInstallation} /> : null}
       </main>
     </>
   );
