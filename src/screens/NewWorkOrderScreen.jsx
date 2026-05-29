@@ -4,6 +4,15 @@ import Button from "../components/Button";
 import Card from "../components/Card";
 import Header from "../components/Header";
 
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 function Field({ label, icon: Icon, children }) {
   return (
     <label className="block">
@@ -21,20 +30,38 @@ export default function NewWorkOrderScreen({ installations, technicians, default
   const [form, setForm] = useState({
     type: "Correctiva",
     installationId: defaults.installationId || installations[0]?.id || "",
-    specialty: "Mecanica",
+    specialty: defaults.specialty || "Mecanica",
     location: "Planta Baja - Area de Bombas",
     technician: technicians[0]?.name || "",
     priority: "Alta",
-    date: "2025-05-14",
+    date: new Date().toISOString().slice(0, 10),
+    time: "08:45",
+    title: "Incidencia en bomba principal",
     description: "Fuga de agua detectada en la conexion de la bomba principal. Requiere revision y reparacion inmediata.",
+    photos: [],
   });
 
   useEffect(() => {
-    if (!defaults.installationId) return;
-    setForm((current) => ({ ...current, installationId: defaults.installationId }));
-  }, [defaults.installationId]);
+    setForm((current) => ({
+      ...current,
+      installationId: defaults.installationId || current.installationId,
+      specialty: defaults.specialty || current.specialty,
+    }));
+  }, [defaults.installationId, defaults.specialty]);
 
   const update = (key, value) => setForm((current) => ({ ...current, [key]: value }));
+
+  const addPhotos = async (event) => {
+    const files = Array.from(event.target.files || []);
+    if (!files.length) return;
+    const photos = await Promise.all(files.map(fileToDataUrl));
+    setForm((current) => ({ ...current, photos: [...current.photos, ...photos] }));
+    event.target.value = "";
+  };
+
+  const removePhoto = (index) => {
+    setForm((current) => ({ ...current, photos: current.photos.filter((_, photoIndex) => photoIndex !== index) }));
+  };
 
   return (
     <>
@@ -101,6 +128,19 @@ export default function NewWorkOrderScreen({ installations, technicians, default
             <input className="min-w-0 flex-1 bg-transparent text-lg font-black outline-none" type="date" value={form.date} onChange={(event) => update("date", event.target.value)} />
           </Field>
 
+          <Field label="Hora" icon={CalendarDays}>
+            <input className="min-w-0 flex-1 bg-transparent text-lg font-black outline-none" type="time" value={form.time} onChange={(event) => update("time", event.target.value)} />
+          </Field>
+
+          <label className="block">
+            <span className="mb-2 block text-base font-black text-white">Titulo corto</span>
+            <input
+              className="min-h-14 w-full rounded-2xl border border-white/18 bg-white/6 px-4 text-lg font-black text-white outline-none focus:border-accent"
+              value={form.title}
+              onChange={(event) => update("title", event.target.value)}
+            />
+          </label>
+
           <label className="block">
             <span className="mb-2 block text-base font-black text-white">Descripcion</span>
             <textarea
@@ -113,19 +153,28 @@ export default function NewWorkOrderScreen({ installations, technicians, default
           </label>
 
           <div>
-            <span className="mb-2 block text-base font-black text-white">Adjuntar foto visual demo</span>
+            <span className="mb-2 block text-base font-black text-white">Adjuntar fotos</span>
             <div className="grid grid-cols-2 gap-3">
-              <div className="relative grid h-28 place-items-end rounded-2xl bg-[linear-gradient(135deg,#cbd5e1,#334155)] p-3">
-                <button className="absolute right-2 top-2 grid h-9 w-9 place-items-center rounded-full bg-primaryDark text-white" aria-label="Quitar foto">
-                  <X size={18} />
-                </button>
-              </div>
-              <button className="grid h-28 place-items-center rounded-2xl border-2 border-dashed border-accent text-accent">
+              {form.photos.map((photo, index) => (
+                <div key={photo} className="relative h-28 overflow-hidden rounded-2xl bg-slate-700">
+                  <img className="h-full w-full object-cover" src={photo} alt="" />
+                  <button
+                    className="absolute right-2 top-2 grid h-9 w-9 place-items-center rounded-full bg-primaryDark text-white"
+                    onClick={() => removePhoto(index)}
+                    type="button"
+                    aria-label="Quitar foto"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+              ))}
+              <label className="grid h-28 cursor-pointer place-items-center rounded-2xl border-2 border-dashed border-accent text-accent">
                 <span className="grid place-items-center gap-2 font-black">
                   <Camera size={32} />
                   Agregar foto
                 </span>
-              </button>
+                <input className="hidden" type="file" accept="image/*" multiple onChange={addPhotos} />
+              </label>
             </div>
           </div>
 

@@ -109,20 +109,29 @@ export default function InstallationsScreen({ installations, assets, workOrders,
           </div>
         ) : null}
 
-        <div className="no-scrollbar -mx-5 flex gap-3 overflow-x-auto px-5">
-          {filters.map((filter) => (
-            <button
-              key={filter.id}
-              onClick={() => setActiveFilter(filter.id)}
-              className={
-                filter.id === activeFilter
-                  ? "shrink-0 rounded-2xl bg-accent px-6 py-3 font-black text-primaryDark"
-                  : "shrink-0 rounded-2xl border border-primary/30 bg-white px-6 py-3 font-black text-primary"
-              }
-            >
-              {filter.label}
-            </button>
-          ))}
+        <div>
+          <div className="mb-2 flex items-center justify-between px-1 text-xs font-black uppercase tracking-wide text-slate-500">
+            <span>Filtros</span>
+            <span>Desliza para buscar</span>
+          </div>
+          <div className="relative -mx-5">
+            <div className="no-scrollbar flex gap-3 overflow-x-auto px-5 pb-1">
+              {filters.map((filter) => (
+                <button
+                  key={filter.id}
+                  onClick={() => setActiveFilter(filter.id)}
+                  className={
+                    filter.id === activeFilter
+                      ? "shrink-0 rounded-2xl bg-accent px-6 py-3 font-black text-primaryDark"
+                      : "shrink-0 rounded-2xl border border-primary/30 bg-white px-6 py-3 font-black text-primary"
+                  }
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </div>
+            <div className="pointer-events-none absolute bottom-0 right-0 top-0 w-12 bg-gradient-to-l from-appBg to-transparent" />
+          </div>
         </div>
 
         <div className="space-y-4">

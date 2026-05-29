@@ -1,42 +1,178 @@
-import { BarChart3, Building2, ChevronRight, ClipboardCheck, Download, FileText, ShieldCheck } from "lucide-react";
+import { BarChart3, Building2, ChevronRight, ClipboardCheck, Download, FileText, ShieldCheck, TimerReset, TrendingUp, Wrench } from "lucide-react";
 import Card from "../components/Card";
 import Header from "../components/Header";
+import StatusBadge from "../components/StatusBadge";
 
-const reports = [
-  { title: "Partes correctivos", text: "Intervenciones, tiempos y evidencias.", icon: ClipboardCheck },
-  { title: "Partes preventivos", text: "Planes ejecutados y tareas pendientes.", icon: ShieldCheck },
-  { title: "Informe mensual", text: "Resumen operativo del mes en curso.", icon: BarChart3 },
-  { title: "Informe por instalacion", text: "Estado de activos por centro.", icon: Building2 },
-  { title: "Exportar datos", text: "Descarga local para copia o revision.", icon: Download },
-];
+function percent(value, total) {
+  if (!total) return 0;
+  return Math.round((value / total) * 100);
+}
 
-export default function ReportsScreen() {
+function ReportCard({ icon: Icon, tone, title, text, metric, detail, children }) {
+  return (
+    <Card className="overflow-hidden p-0">
+      <button className="w-full text-left" onClick={() => alert(`Utilidad pendiente: se preparara ${title.toLowerCase()} con exportacion y vista PDF.`)}>
+        <div className="grid grid-cols-[74px_minmax(0,1fr)_24px] gap-4 p-4">
+          <div className={`grid h-16 w-16 place-items-center rounded-2xl ${tone}`}>
+            <Icon size={31} />
+          </div>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-xl font-black leading-tight">{title}</h2>
+              <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-black uppercase text-slate-500">Plantilla</span>
+            </div>
+            <p className="mt-1 font-semibold leading-snug text-slate-500">{text}</p>
+          </div>
+          <ChevronRight className="mt-5 text-slate-600" />
+        </div>
+        <div className="border-t border-slate-100 px-4 py-3">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <strong className="text-2xl font-black text-primaryDark">{metric}</strong>
+              <p className="text-xs font-black uppercase text-slate-500">{detail}</p>
+            </div>
+            {children}
+          </div>
+        </div>
+      </button>
+    </Card>
+  );
+}
+
+export default function ReportsScreen({ workOrders = [], installations = [] }) {
+  const corrective = workOrders.filter((order) => order.type === "Correctiva");
+  const preventive = workOrders.filter((order) => order.type === "Preventiva");
+  const completed = workOrders.filter((order) => order.status === "Completada" || order.status === "Cerrada");
+  const open = workOrders.length - completed.length;
+  const completion = percent(completed.length, workOrders.length);
+  const topInstallation = installations
+    .map((installation) => ({
+      ...installation,
+      orderCount: workOrders.filter((order) => order.installationId === installation.id).length,
+    }))
+    .sort((a, b) => b.orderCount - a.orderCount)[0];
+
   return (
     <>
-      <Header title="Informes" subtitle="Partes, resumenes y exportaciones" />
-      <main className="space-y-4 px-5 pb-32 pt-6">
-        {reports.map((item) => {
-          const Icon = item.icon;
-          return (
-            <Card key={item.title} className="p-4">
-              <button className="flex w-full items-center gap-4 text-left">
-                <div className="grid h-16 w-16 place-items-center rounded-2xl bg-slate-100 text-slate-800">
-                  <Icon size={30} />
-                </div>
-                <div className="flex-1">
-                  <h2 className="text-xl font-black">{item.title}</h2>
-                  <p className="mt-1 font-semibold text-slate-500">{item.text}</p>
-                </div>
-                <ChevronRight className="text-slate-700" />
-              </button>
-            </Card>
-          );
-        })}
-        <div className="rounded-app border border-slate-200 bg-white p-5 text-slate-950 shadow-soft">
-          <FileText className="text-slate-800" size={34} />
-          <h2 className="mt-3 text-2xl font-black">Informes preparados para PDF</h2>
-          <p className="mt-2 font-semibold text-slate-500">En esta primera fase quedan planteadas las salidas principales para generar partes tecnicos mas adelante.</p>
+      <Header title="Informes" subtitle="Partes, resumenes y exportaciones">
+        <div className="grid grid-cols-3 gap-3">
+          <div className="rounded-2xl bg-white/10 p-3 text-center ring-1 ring-white/15">
+            <strong className="block text-2xl font-black text-accent">{workOrders.length}</strong>
+            <span className="text-xs font-black uppercase text-white/70">OTs</span>
+          </div>
+          <div className="rounded-2xl bg-white/10 p-3 text-center ring-1 ring-white/15">
+            <strong className="block text-2xl font-black text-accent">{completion}%</strong>
+            <span className="text-xs font-black uppercase text-white/70">Cierre</span>
+          </div>
+          <div className="rounded-2xl bg-white/10 p-3 text-center ring-1 ring-white/15">
+            <strong className="block text-2xl font-black text-accent">{open}</strong>
+            <span className="text-xs font-black uppercase text-white/70">Abiertas</span>
+          </div>
         </div>
+      </Header>
+
+      <main className="space-y-5 px-5 pb-32 pt-6">
+        <Card className="bg-primaryDark text-white">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-sm font-black uppercase text-accent">Panel del mes</p>
+              <h2 className="mt-2 text-2xl font-black leading-tight">Actividad de mantenimiento</h2>
+              <p className="mt-2 font-semibold text-white/70">Resumen rapido de correctivos, preventivos y centros con mas trabajo.</p>
+            </div>
+            <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-white/10 text-accent">
+              <TrendingUp size={30} />
+            </div>
+          </div>
+          <div className="mt-5 h-3 overflow-hidden rounded-full bg-white/10">
+            <div className="h-full rounded-full bg-accent" style={{ width: `${completion}%` }} />
+          </div>
+          <div className="mt-3 flex items-center justify-between text-sm font-black text-white/75">
+            <span>{completed.length} cerradas</span>
+            <span>{open} pendientes</span>
+          </div>
+        </Card>
+
+        <div className="grid grid-cols-2 gap-3">
+          <Card className="p-4">
+            <div className="grid h-11 w-11 place-items-center rounded-2xl bg-red-100 text-red-700">
+              <Wrench size={24} />
+            </div>
+            <p className="mt-3 text-sm font-black uppercase text-slate-500">Correctivos</p>
+            <strong className="text-3xl font-black">{corrective.length}</strong>
+          </Card>
+          <Card className="p-4">
+            <div className="grid h-11 w-11 place-items-center rounded-2xl bg-blue-100 text-blue-700">
+              <ShieldCheck size={24} />
+            </div>
+            <p className="mt-3 text-sm font-black uppercase text-slate-500">Preventivos</p>
+            <strong className="text-3xl font-black">{preventive.length}</strong>
+          </Card>
+        </div>
+
+        <section className="space-y-4">
+          <div className="flex items-end justify-between px-1">
+            <h2 className="text-xl font-black">Informes disponibles</h2>
+            <StatusBadge status="Borrador" />
+          </div>
+
+          <ReportCard
+            icon={ClipboardCheck}
+            tone="bg-red-100 text-red-700"
+            title="Partes correctivos"
+            text="Intervenciones, tiempos, evidencias y estado de incidencias."
+            metric={corrective.length}
+            detail="intervenciones"
+          >
+            <StatusBadge status={corrective.length ? "Listo" : "Sin datos"} />
+          </ReportCard>
+
+          <ReportCard
+            icon={ShieldCheck}
+            tone="bg-blue-100 text-blue-700"
+            title="Partes preventivos"
+            text="Planes ejecutados, tareas pendientes y cumplimiento previsto."
+            metric={`${percent(preventive.filter((order) => order.status === "Completada").length, preventive.length)}%`}
+            detail="cumplimiento"
+          >
+            <StatusBadge status={preventive.length ? "Listo" : "Sin datos"} />
+          </ReportCard>
+
+          <ReportCard
+            icon={BarChart3}
+            tone="bg-green-100 text-green-700"
+            title="Informe mensual"
+            text="Resumen operativo del mes con volumen, cierre y prioridades."
+            metric={`${completion}%`}
+            detail="ordenes cerradas"
+          >
+            <div className="flex items-center gap-1 rounded-full bg-green-50 px-3 py-2 text-sm font-black text-green-700">
+              <TimerReset size={16} />
+              Mes actual
+            </div>
+          </ReportCard>
+
+          <ReportCard
+            icon={Building2}
+            tone="bg-purple-100 text-purple-700"
+            title="Informe por instalacion"
+            text="Estado de activos, OTs abiertas y actividad por centro."
+            metric={topInstallation?.orderCount || 0}
+            detail={topInstallation?.name || "sin centro"}
+          >
+            <StatusBadge status={topInstallation?.status || "Sin datos"} />
+          </ReportCard>
+
+          <ReportCard
+            icon={Download}
+            tone="bg-slate-100 text-slate-800"
+            title="Exportar datos"
+            text="Descarga preparada para revisar o compartir datos operativos."
+            metric="JSON"
+            detail="formato local"
+          >
+            <FileText className="text-slate-600" size={24} />
+          </ReportCard>
+        </section>
       </main>
     </>
   );

@@ -162,9 +162,11 @@ function enrichWorkOrders(workOrders, installations, assets, technicians) {
       priority: labelFrom(PRIORITY_LABELS, order.priority),
       specialty: labelFrom(SPECIALTY_LABELS, order.specialty),
       installation: installation?.name || "Sin instalacion",
+      installationImageUrl: installation?.imageUrl || "",
+      installationAddress: installation ? formatAddress(installation) : "",
       assetName: asset?.name || "",
       technician: technician?.name || "Sin asignar",
-      photos: order.initialPhotos || [],
+      photos: [...(order.initialPhotos || []), ...(order.finalPhotos || [])],
       time: new Date(order.scheduledAt || order.createdAt).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" }),
     };
   });
@@ -228,12 +230,12 @@ export default function App() {
   const createWorkOrder = (form) => {
     const installation = installations.find((item) => item.id === form.installationId) || installations[0];
     const technician = technicians.find((item) => item.name === form.technician || item.id === form.technician);
-    const scheduledAt = `${form.date || new Date().toISOString().slice(0, 10)}T08:45:00.000Z`;
+    const scheduledAt = `${form.date || new Date().toISOString().slice(0, 10)}T${form.time || "08:45"}:00.000Z`;
     const createdAt = nowIso();
     const created = {
       id: createId("ot"),
       number: generateWorkOrderNumber(workOrders),
-      title: form.description.split(".")[0] || "Nueva orden de trabajo",
+      title: form.title || form.description.split(".")[0] || "Nueva orden de trabajo",
       type: TYPE_VALUES[form.type] || "correctiva",
       status: "pendiente",
       installationId: installation.id,
@@ -247,7 +249,7 @@ export default function App() {
       materials: [],
       timeSpentMinutes: 0,
       observations: "",
-      initialPhotos: ["bomba"],
+      initialPhotos: form.photos?.length ? form.photos : [],
       finalPhotos: [],
       createdAt,
       scheduledAt,
@@ -300,7 +302,57 @@ export default function App() {
 
   const updateWorkOrderStatus = (id, status) => {
     const normalizedStatus = STATUS_VALUES[status] || status;
-    setWorkOrders((current) => current.map((order) => (order.id === id ? { ...order, status: normalizedStatus, updatedAt: nowIso() } : order)));
+    setWorkOrders((current) =>
+      current.map((order) =>
+        order.id === id
+          ? {
+              ...order,
+              status: normalizedStatus,
+              completedAt: normalizedStatus === "completada" ? nowIso() : order.completedAt,
+              updatedAt: nowIso(),
+            }
+          : order
+      )
+    );
+  };
+
+  const saveWorkOrder = (id, form) => {
+    const technician = technicians.find((item) => item.name === form.technician || item.id === form.technician);
+    setWorkOrders((current) =>
+      current.map((order) =>
+        order.id === id
+          ? {
+              ...order,
+              title: form.title || order.title,
+              type: TYPE_VALUES[form.type] || order.type,
+              status: STATUS_VALUES[form.status] || order.status,
+              installationId: form.installationId || order.installationId,
+              specialty: SPECIALTY_VALUES[form.specialty] || order.specialty,
+              location: form.location || order.location,
+              priority: PRIORITY_VALUES[form.priority] || order.priority,
+              assignedTechnicianId: technician?.id || form.assignedTechnicianId || order.assignedTechnicianId,
+              description: form.description || order.description,
+              actionTaken: form.actionTaken ?? order.actionTaken,
+              observations: form.observations ?? order.observations,
+              timeSpentMinutes: Number(form.timeSpentMinutes || order.timeSpentMinutes || 0),
+              scheduledAt: form.date ? `${form.date}T${form.time || "08:45"}:00.000Z` : order.scheduledAt,
+              initialPhotos: form.initialPhotos || order.initialPhotos || [],
+              finalPhotos: form.finalPhotos || order.finalPhotos || [],
+              completedAt: (STATUS_VALUES[form.status] || order.status) === "completada" ? order.completedAt || nowIso() : order.completedAt,
+              updatedAt: nowIso(),
+            }
+          : order
+      )
+    );
+  };
+
+  const deleteWorkOrder = (id) => {
+    setWorkOrders((current) => {
+      const next = current.filter((order) => order.id !== id);
+      setSelectedWorkOrderId(next[0]?.id || "");
+      return next;
+    });
+    setScreen(previousScreen === "agenda" ? "agenda" : "workOrders");
   };
 
   const reloadData = (nextData) => {
@@ -357,8 +409,8 @@ export default function App() {
             onBack={() => setScreen("installations")}
             onSaveInstallation={saveInstallation}
             onDeleteInstallation={deleteInstallation}
-            onCreateWorkOrder={() => {
-              setNewWorkOrderDefaults({ installationId: selectedInstallation?.id || "" });
+            onCreateWorkOrder={(defaults = {}) => {
+              setNewWorkOrderDefaults({ installationId: selectedInstallation?.id || "", ...defaults });
               setPreviousScreen("installationDetail");
               setScreen("newWorkOrder");
             }}
@@ -378,7 +430,15 @@ export default function App() {
           />
         )}
         {screen === "workOrderDetail" && (
-          <WorkOrderDetailScreen order={selectedWorkOrder} onBack={() => setScreen(previousScreen)} onUpdateStatus={updateWorkOrderStatus} />
+          <WorkOrderDetailScreen
+            order={selectedWorkOrder}
+            installations={displayInstallations}
+            technicians={technicians}
+            onBack={() => setScreen(previousScreen)}
+            onUpdateStatus={updateWorkOrderStatus}
+            onSaveWorkOrder={saveWorkOrder}
+            onDeleteWorkOrder={deleteWorkOrder}
+          />
         )}
         {screen === "newWorkOrder" && (
           <NewWorkOrderScreen
@@ -399,7 +459,7 @@ export default function App() {
             }}
           />
         )}
-        {screen === "reports" && <ReportsScreen />}
+        {screen === "reports" && <ReportsScreen workOrders={displayWorkOrders} installations={displayInstallations} />}
         {screen === "settings" && (
           <SettingsScreen
             settings={settings}

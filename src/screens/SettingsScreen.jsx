@@ -4,12 +4,12 @@ import Header from "../components/Header";
 import Button from "../components/Button";
 
 const settings = [
-  { title: "Datos de empresa", text: "Logo, CIF, direccion y contacto", icon: Building2 },
-  { title: "Tecnicos", text: "Equipo, especialidades y telefonos", icon: UserRoundCog },
-  { title: "Copia de seguridad", text: "Exportacion e importacion local", icon: DatabaseBackup },
-  { title: "Tema", text: "Color verde mantenimiento", icon: Palette },
-  { title: "Legal y privacidad", text: "Condiciones, permisos y datos locales", icon: Scale },
-  { title: "Version app", text: "IsiVoltPro Mantenimiento 1.0.0", icon: Wrench },
+  { title: "Datos de empresa", text: "Logo, CIF, direccion y contacto", icon: Building2, active: false },
+  { title: "Tecnicos", text: "Equipo, especialidades y telefonos", icon: UserRoundCog, active: false },
+  { title: "Copia de seguridad", text: "Exportacion e importacion local", icon: DatabaseBackup, active: true },
+  { title: "Tema", text: "Color verde mantenimiento", icon: Palette, active: false },
+  { title: "Legal y privacidad", text: "Condiciones, permisos y datos locales", icon: Scale, active: false },
+  { title: "Version app", text: "IsiVoltPro Mantenimiento 1.0.0", icon: Wrench, active: true },
 ];
 
 export default function SettingsScreen({ settings: appSettings, onExportBackup, onImportBackup, onResetAllData }) {
@@ -60,7 +60,10 @@ export default function SettingsScreen({ settings: appSettings, onExportBackup, 
           const Icon = item.icon;
           return (
             <Card key={item.title} className="p-4">
-              <button className="flex w-full items-center gap-4 text-left">
+              <button
+                className="flex w-full items-center gap-4 text-left"
+                onClick={() => item.active ? null : alert(`Utilidad pendiente: ${item.title.toLowerCase()} se configurara desde esta pantalla.`)}
+              >
                 <div className="grid h-14 w-14 place-items-center rounded-2xl bg-slate-100 text-slate-800">
                   <Icon size={27} />
                 </div>

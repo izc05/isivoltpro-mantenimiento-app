@@ -16,14 +16,39 @@ export function formatDateTime(value) {
   }).format(new Date(value));
 }
 
-export function getWeekDays() {
-  return [
-    { label: "L", day: 19 },
-    { label: "M", day: 20 },
-    { label: "X", day: 21 },
-    { label: "J", day: 22 },
-    { label: "V", day: 23, selected: true },
-    { label: "S", day: 24 },
-    { label: "D", day: 25 },
-  ];
+export function formatMonthYear(value) {
+  return new Intl.DateTimeFormat("es-ES", {
+    month: "long",
+    year: "numeric",
+  }).format(new Date(value));
+}
+
+export function formatLongDay(value) {
+  return new Intl.DateTimeFormat("es-ES", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  }).format(new Date(value));
+}
+
+export function toDateInputValue(value) {
+  return new Date(value).toISOString().slice(0, 10);
+}
+
+export function getWeekDays(selectedDate) {
+  const selected = new Date(selectedDate);
+  const monday = new Date(selected);
+  const day = selected.getDay() || 7;
+  monday.setDate(selected.getDate() - day + 1);
+
+  return Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(monday);
+    date.setDate(monday.getDate() + index);
+    return {
+      label: ["L", "M", "X", "J", "V", "S", "D"][index],
+      day: date.getDate(),
+      value: toDateInputValue(date),
+      selected: toDateInputValue(date) === toDateInputValue(selected),
+    };
+  });
 }

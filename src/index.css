@@ -32,6 +32,12 @@ select {
 
 select {
   appearance: none;
+  color-scheme: dark;
+}
+
+select option {
+  background: #0f3158;
+  color: #ffffff;
 }
 
 .no-scrollbar {
